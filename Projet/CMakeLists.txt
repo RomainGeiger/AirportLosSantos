@@ -2,8 +2,7 @@ add_executable(AirportLosSantos
     main.cpp
 )
 
-# <-- ICI : on ajoute ton dossier hpp pour que #include fonctionne
+# ====== INCLUSION DU DOSSIER hpp ======
 target_include_directories(AirportLosSantos PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/Projet/hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/hpp
 )
-
