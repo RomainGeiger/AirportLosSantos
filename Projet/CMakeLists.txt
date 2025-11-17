@@ -1,1 +1,1 @@
-add_executable(Projet test.cpp)
+add_executable(Projet main.cpp "types.hpp")
