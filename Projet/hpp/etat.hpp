@@ -1,5 +1,6 @@
 #pragma once
 
+namespace ls {
 
 	enum class Etat {
 
@@ -28,4 +29,6 @@
 		default:                 return "Inconnu";
 
 		}
+	}
+
 }
