@@ -29,5 +29,4 @@ namespace ls {
 		default:                 return "Inconnu";
 
 		}
-	}
 }

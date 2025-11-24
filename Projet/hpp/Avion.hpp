@@ -1,42 +1,44 @@
 #pragma once
-
 #include <string>
-#include "types.h"
+#include "types.hpp"
+#include "etat.hpp"
 
 namespace ls {
-public : 
-	
-	Avion(std::string id,
-		Vec2 positionInitiale,
-		Vec2 vitesseInitiale,
-		float carburantInitial,
-		float consomationParSeconde);
 
-	void update(float dt);
+    class Avion {
+    public:
+        Avion(std::string id,
+            Vec2 position2D,
+            float altitude,
+            Vec2 vitesse2D,
+            float carburantInitial,
+            float consommationParSeconde,
+            Etat etatInitial = Etat::EnApproche);
 
-	const std::string& id() const { return id_; }
-	const Vec2& pos() const { return pos_; }
-	const Vec2& vit() const { return vit_; }
-	float              fuel() const { return carburant_; }
-	float              conso() const { return conso_; }
-	Etat               etat() const { return etat_; }
+        void update(float dt);
 
-	//Les setters
-	void setPosition(Vec2 p) { pos_ = p; }
-	void setVitesse(Vec2 v) { vit_ = v; }
-	void setEtat(Etat e) { etat_ = e; }
+        const std::string& id() const { return id_; }
+        const Vec2& pos() const { return pos_; }
+        float              alt() const { return alt_; }
+        const Vec2& vit() const { return vit_; }
+        float              fuel() const { return carburant_; }
+        float              conso() const { return conso_; }
+        Etat               etat() const { return etat_; }
 
-	bool estALaReserve() const;
+        void setEtat(Etat e) { etat_ = e; }
+        void setPosition(Vec2 p) { pos_ = p; }
+        void setAltitude(float z) { alt_ = z; }
+        void setVitesse(Vec2 v) { vit_ = v; }
 
-private:
-	std::string id_;      
-	Vec2        pos_;      
-	Vec2        vit_;      
-	float       carburant_; 
-	float       conso_;   
-	Etat        etat_;    
-};
+        bool estALaReserve() const { return carburant_ < 10.f; }
 
-}
+    private:
+        std::string id_;
+        Vec2        pos_;
+        float       alt_;
+        Vec2        vit_;
+        float       carburant_;
+        float       conso_;
+        Etat        etat_;
+    };
 
-}
