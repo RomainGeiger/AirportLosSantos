@@ -4,13 +4,7 @@
 
     namespace ls {
 
-        Avion::Avion(std::string id,
-            Vec2 position2D,
-            float altitude,
-            Vec2 vitesse2D,
-            float carburantInitial,
-            float consommationParSeconde,
-            Etat etatInitial)
+        Avion::Avion(std::string id,Vec2 position2D,float altitude,Vec2 vitesse2D,float carburantInitial,float consommationParSeconde,Etat etatInitial)
             : id_(std::move(id))
             , pos_(position2D)
             , alt_(altitude)
@@ -21,7 +15,7 @@
         {
         }
 
-        void Avion::update(float dt) {
+        void Avion::update(float dt) {q
             pos_ += vit_ * dt;
             carburant_ -= conso_ * dt;
             if (carburant_ < 0.f) carburant_ = 0.f;
