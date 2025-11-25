@@ -1,6 +1,5 @@
 #pragma once
 #include <string>
-#include "types.hpp"
 #include "etat.hpp"
 
 namespace ls {
@@ -19,11 +18,11 @@ namespace ls {
 
         const std::string& id() const { return id_; }
         const Vec2& pos() const { return pos_; }
-        float              alt() const { return alt_; }
+        float alt() const { return alt_; }
         const Vec2& vit() const { return vit_; }
-        float              fuel() const { return carburant_; }
-        float              conso() const { return conso_; }
-        Etat               etat() const { return etat_; }
+        float fuel() const { return carburant_; }
+        float conso() const { return conso_; }
+        Etat etat() const { return etat_; }
 
         void setEtat(Etat e) { etat_ = e; }
         void setPosition(Vec2 p) { pos_ = p; }
@@ -34,11 +33,11 @@ namespace ls {
 
     private:
         std::string id_;
-        Vec2        pos_;
-        float       alt_;
-        Vec2        vit_;
-        float       carburant_;
-        float       conso_;
-        Etat        etat_;
+        Vec2 pos_;
+        float alt_;
+        Vec2 vit_;
+        float carburant_;
+        float conso_;
+        Etat etat_;
     };
 
