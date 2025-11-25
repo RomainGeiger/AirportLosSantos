@@ -15,7 +15,7 @@
         {
         }
 
-        void Avion::update(float dt) {q
+        void Avion::update(float dt) {
             pos_ += vit_ * dt;
             carburant_ -= conso_ * dt;
             if (carburant_ < 0.f) carburant_ = 0.f;
