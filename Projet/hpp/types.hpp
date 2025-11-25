@@ -10,7 +10,7 @@ namespace ls {
 		Vec2() = default;
 		Vec2(float x_, float y_) : x(x_), y(y_) {}
 
-		//opérations basiques
+		//opï¿½rations basiques
 
 		Vec2 operator+(const Vec2& o) const {
 			return Vec2(x + o.x, y + o.y);
@@ -24,7 +24,7 @@ namespace ls {
 			return Vec2(x * s, y * s);
 		}
 
-		//opérations composées
+		//opï¿½rations composï¿½es
 
 		Vec2 operator+=(const Vec2& o) {
 			x += o.x;
@@ -43,7 +43,7 @@ namespace ls {
 		}
 		
 		float length() const {
-			return ::std::sqrt(x * x + y * y);
+			return std::sqrt(x * x + y * y);
 		}
 	};
 

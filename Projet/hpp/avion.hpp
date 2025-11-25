@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include "etat.hpp"
+#include "types.hpp"
 
 namespace ls {
 
@@ -40,4 +41,6 @@ namespace ls {
         float conso_;
         Etat etat_;
     };
+
+}
 
