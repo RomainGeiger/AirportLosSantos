@@ -51,11 +51,10 @@ sf::Vector2f Aircraft::getPosition() {
     std::lock_guard<std::mutex> lock(m_dataMutex);
     return m_position;
 }
-
 float Aircraft::getRotation() {
     std::lock_guard<std::mutex> lock(m_dataMutex);
     sf::Vector2f dir = m_targetPosition - m_position;
-    return std::atan2(dir.y, dir.x) * 180 / 3.14159f;
+    return std::atan2(dir.y, dir.x) * 180.0f / 3.14159f;
 }
 
 void Aircraft::run() {
@@ -86,6 +85,28 @@ void Aircraft::run() {
 
 // --- Implementation TWR ---
 TWR::TWR(std::string airportName) : m_name(airportName), m_runwayBusy(false) {}
+
+bool TWR::requestTakeoff(std::shared_ptr<Aircraft> plane) {
+    std::lock_guard<std::mutex> lock(m_twrMutex);
+    // Logique simplifiée : si la piste n'est pas occupée, on autorise
+    if (!m_runwayBusy) {
+        m_runwayBusy = true;
+        Logger::log("TWR " + m_name, "Takeoff clearance for " + plane->getId());
+
+        // Timer pour libérer la piste
+        std::thread([this]() {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            this->m_runwayBusy = false;
+            }).detach();
+        return true;
+    }
+    return false;
+}
+
+void TWR::update() {
+    // Logique de gestion de la file d'attente au sol (à implémenter plus tard)
+    // Pour l'instant vide pour que ça compile
+}
 
 bool TWR::requestLanding(std::shared_ptr<Aircraft> plane) {
     std::lock_guard<std::mutex> lock(m_twrMutex);
