@@ -1,8 +1,1 @@
-add_executable(AirportLosSantos
-    main.cpp
- "avion.cpp")
-
-# ====== INCLUSION DU DOSSIER hpp ======
-target_include_directories(AirportLosSantos PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/hpp
-)
+add_executable(AirportLosSantosV2 main.cpp "ATC.cpp" "ATC.hpp")
