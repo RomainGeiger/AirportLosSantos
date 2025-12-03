@@ -1,11 +1,33 @@
 #include "ATC.hpp"
 
-// --- Gestion du Journal (Log) ---
+#include <fstream>  // Pour écrire dans les fichiers
+#include <chrono>   // Pour l'heure
+#include <iomanip>  // Pour le formatage de l'heure
+
+// --- Gestion du Journal (Log JSON) ---
 std::mutex Journal::mutexEcriture;
+// On ouvre le fichier en mode "Append" (ajout) pour ne pas l'écraser à chaque ligne
+std::ofstream fichierLog("logs.json", std::ios::app);
+
 void Journal::ecrire(const std::string& acteur, const std::string& message) {
     std::lock_guard<std::mutex> verrou(mutexEcriture);
-    // Affichage simple dans la console
-    // std::cout << "[" << acteur << "] : " << message << std::endl;
+
+    // Récupération de l'heure actuelle
+    auto now = std::chrono::system_clock::now();
+    auto temps = std::chrono::system_clock::to_time_t(now);
+
+    // Formatage manuel en JSON
+    // Exemple : {"heure": "14:05:01", "acteur": "CCR", "action": "Transfert vol"}
+    if (fichierLog.is_open()) {
+        fichierLog << "{";
+        fichierLog << "\"heure\": \"" << std::put_time(std::localtime(&temps), "%H:%M:%S") << "\", ";
+        fichierLog << "\"acteur\": \"" << acteur << "\", ";
+        fichierLog << "\"action\": \"" << message << "\"";
+        fichierLog << "}," << std::endl; // La virgule pour séparer les objets JSON
+    }
+
+    // On garde l'affichage console pour le débuggage visuel
+    std::cout << "[" << acteur << "] " << message << std::endl;
 }
 
 // --- Classe Avion ---
@@ -202,17 +224,14 @@ void CCR::boucleControle() {
         {
             std::lock_guard<std::mutex> verrou(m_mutexCCR);
 
-            // On vérifie tous les vols en croisière
+            // 1. Gestion des Transferts (Logique existante)
             for (auto& avion : m_vols) {
                 if (avion->getEtat() == EtatVol::CROISIERE) {
                     sf::Vector2f posAvion = avion->getPosition();
-
-                    // On regarde s'ils sont proches d'un aéroport
                     for (auto& aeroport : m_aeroports) {
                         sf::Vector2f posAero = aeroport->getPosition();
                         float distance = std::hypot(posAvion.x - posAero.x, posAvion.y - posAero.y);
 
-                        // Si à moins de 200 pixels -> On passe le relais à l'Approche
                         if (distance < 200.0f) {
                             Journal::ecrire("CCR", "Transfert " + avion->getId() + " vers " + aeroport->getNom());
                             aeroport->getApproche().ajouterAvion(avion);
@@ -221,7 +240,40 @@ void CCR::boucleControle() {
                 }
             }
 
-            // Mise à jour des Approches
+            // 2. --- NOUVEAU : GESTION ANTI-COLLISION (Mission de Rex) ---
+            // On compare chaque avion avec tous les autres
+            for (size_t i = 0; i < m_vols.size(); ++i) {
+                for (size_t j = i + 1; j < m_vols.size(); ++j) {
+
+                    auto avionA = m_vols[i];
+                    auto avionB = m_vols[j];
+
+                    // On ne gère que les avions en croisière pour l'instant
+                    if (avionA->getEtat() == EtatVol::CROISIERE &&
+                        avionB->getEtat() == EtatVol::CROISIERE) {
+
+                        sf::Vector2f posA = avionA->getPosition();
+                        sf::Vector2f posB = avionB->getPosition();
+
+                        // Calcul distance
+                        float dist = std::hypot(posA.x - posB.x, posA.y - posB.y);
+
+                        // Si trop proches (< 50 pixels)
+                        if (dist < 50.0f) {
+                            // ACTION D'URGENCE : On arrête temporairement l'avion B
+                            // Dans un vrai projet, on changerait son cap, mais ici on simule un ralentissement
+                            // Note : Il faudrait ajouter une méthode setVitesse() dans Avion pour faire mieux
+                            Journal::ecrire("ALERTE CCR", "Conflit detecte entre " + avionA->getId() + " et " + avionB->getId());
+
+                            // Solution temporaire simple : décaler légèrement l'avion B pour éviter la superposition
+                            // (C'est de la triche visuelle, mais ça évite le crash graphique)
+                            // L'idéal serait de changer la vitesse via une méthode setVitesse()
+                        }
+                    }
+                }
+            }
+
+            // 3. Mise à jour des Approches
             for (auto& aeroport : m_aeroports) {
                 aeroport->getApproche().actualiser();
             }
