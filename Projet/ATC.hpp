@@ -1,6 +1,3 @@
-#ifndef ATC_H
-#define ATC_H
-
 #include <iostream>
 #include <vector>
 #include <string>
@@ -9,105 +6,109 @@
 #include <atomic>
 #include <cmath>
 #include <memory>
-#include <queue>
 #include <SFML/Graphics.hpp>
 
-// États possibles d'un avion (selon le PDF)
-enum class FlightState {
-    CRUISE,     // Géré par CCRS
-    APPROACH,   // Géré par APP
-    LANDING,    // Géré par TWR
-    TAXI,       // Géré par TWR (Roulage)
-    PARKED,     // Géré par TWR
-    TAKEOFF     // Géré par TWR
+// États possibles d'un avion
+enum class EtatVol {
+    CROISIERE,      // Géré par le CCR
+    APPROCHE,       // Géré par l'Approche (APP)
+    ATTERRISSAGE,   // Géré par la Tour (TWR)
+    ROULAGE,        // Sur le tarmac
+    PARKING,        // Garé
+    DECOLLAGE       // Sur la piste
 };
 
-// Logger simple pour simuler la traçabilité JSON
-struct Logger {
-    static std::mutex logMutex;
-    static void log(const std::string& actor, const std::string& message);
+// Petite classe utilitaire pour écrire dans la console sans bug d'affichage
+struct Journal {
+    static std::mutex mutexEcriture;
+    static void ecrire(const std::string& acteur, const std::string& message);
 };
 
-// --- Classe Avion (Agent Autonome) ---
-class Aircraft {
+// --- Classe Avion ---
+class Avion {
 public:
-    Aircraft(std::string id, sf::Vector2f startPos, sf::Vector2f target, float speed);
-    ~Aircraft();
+    Avion(std::string id, sf::Vector2f posDepart, sf::Vector2f posCible, float vitesse);
+    ~Avion();
 
-    // Méthodes pour le thread principal (Physique)
-    void startEngine();
-    void stopEngine();
+    // Gestion du moteur (Thread)
+    void demarrer();
+    void arreter();
 
-    // Méthodes pour l'interaction avec les contrôleurs
-    void setTarget(sf::Vector2f newTarget);
-    void setState(FlightState newState);
-    FlightState getState() const;
+    // Interaction
+    void definirCible(sf::Vector2f nouvelleCible);
+    void changerEtat(EtatVol nouvelEtat);
+    EtatVol getEtat() const;
     std::string getId() const;
 
-    // Méthodes pour l'affichage SFML (Thread-safe)
+    // Pour l'affichage SFML
     sf::Vector2f getPosition();
     float getRotation();
 
 private:
-    void run(); // Boucle principale du thread de l'avion
+    void boucleVol(); // La fonction qui tourne dans le thread
 
     std::string m_id;
     sf::Vector2f m_position;
-    sf::Vector2f m_targetPosition;
-    float m_speed;
-    FlightState m_state;
+    sf::Vector2f m_cible;
+    float m_vitesse;
+    EtatVol m_etat;
 
-    // Gestion du Thread
-    std::atomic<bool> m_running;
-    std::thread m_thread;
-    mutable std::mutex m_dataMutex; // Protège position et état pour l'affichage
+    // Gestion technique (Thread et protection des données)
+    std::atomic<bool> m_enVol;
+    std::thread m_threadVol;
+    mutable std::mutex m_mutexDonnees;
 };
 
 // --- Tour de Contrôle (TWR) ---
-class TWR {
+class Tour {
 public:
-    TWR(std::string airportName);
-    bool requestLanding(std::shared_ptr<Aircraft> plane);
-    bool requestTakeoff(std::shared_ptr<Aircraft> plane);
-    void update(); // Logique de gestion de la piste
+    Tour(std::string nomAeroport);
+
+    // Retourne vrai si la demande est acceptée
+    bool demanderAtterrissage(std::shared_ptr<Avion> avion);
+    bool demanderDecollage(std::shared_ptr<Avion> avion);
+
+    void actualiser();
 
 private:
-    std::string m_name;
-    bool m_runwayBusy;
-    std::mutex m_twrMutex;
+    std::string m_nom;
+    bool m_pisteOccupee; // Une seule piste pour faire simple
+    std::mutex m_mutexTour;
 };
 
 // --- Contrôle d'Approche (APP) ---
-class APP {
+class Approche {
 public:
-    APP(std::string airportName, sf::Vector2f location, TWR* twrRef);
-    void registerAircraft(std::shared_ptr<Aircraft> plane);
-    void update(); // Gère les trajectoires d'approche
-    sf::Vector2f getLocation() const { return m_location; }
+    Approche(std::string nomAeroport, sf::Vector2f position, Tour* tourAssociee);
+
+    void ajouterAvion(std::shared_ptr<Avion> avion);
+    void actualiser(); // Gère les avions proches
+    sf::Vector2f getPosition() const { return m_position; }
 
 private:
-    std::string m_name;
-    sf::Vector2f m_location;
-    TWR* m_linkedTWR; // Lien vers la tour associée
-    std::vector<std::shared_ptr<Aircraft>> m_planesInZone;
-    std::mutex m_appMutex;
+    std::string m_nom;
+    sf::Vector2f m_position;
+    Tour* m_tourAssociee;
+    std::vector<std::shared_ptr<Avion>> m_avionsSousControle;
+    std::mutex m_mutexApp;
 };
 
-// --- Structure Aéroport (Conteneur Logique & Graphique) ---
-class Airport {
+// --- Aéroport (Contient Tour + Approche) ---
+class Aeroport {
 public:
-    Airport(std::string name, sf::Vector2f position);
+    Aeroport(std::string nom, sf::Vector2f position);
 
-    APP& getAPP() { return *m_app; }
-    TWR& getTWR() { return *m_twr; }
+    Approche& getApproche() { return *m_approche; }
+    Tour& getTour() { return *m_tour; }
+
     sf::Vector2f getPosition() const { return m_position; }
-    std::string getName() const { return m_name; }
+    std::string getNom() const { return m_nom; }
 
 private:
-    std::string m_name;
+    std::string m_nom;
     sf::Vector2f m_position;
-    std::unique_ptr<TWR> m_twr;
-    std::unique_ptr<APP> m_app;
+    std::unique_ptr<Tour> m_tour;
+    std::unique_ptr<Approche> m_approche;
 };
 
 // --- Centre de Contrôle Régional (CCR) ---
@@ -116,24 +117,22 @@ public:
     CCR();
     ~CCR();
 
-    void addFlight(std::shared_ptr<Aircraft> plane);
-    void addAirport(std::shared_ptr<Airport> airport);
+    void ajouterVol(std::shared_ptr<Avion> avion);
+    void ajouterAeroport(std::shared_ptr<Aeroport> aeroport);
 
-    void startControl();
-    void stopControl();
+    void lancerSimulation();
+    void arreterSimulation();
 
-    // Pour l'affichage dans le main
-    std::vector<std::shared_ptr<Aircraft>> getFlights();
+    // Pour dessiner dans le main
+    std::vector<std::shared_ptr<Avion>> recupererVols();
 
 private:
-    void run(); // Boucle de gestion globale (collisions, hand-off)
+    void boucleControle(); // Thread principal du CCR
 
-    std::vector<std::shared_ptr<Aircraft>> m_flights;
-    std::vector<std::shared_ptr<Airport>> m_airports;
+    std::vector<std::shared_ptr<Avion>> m_vols;
+    std::vector<std::shared_ptr<Aeroport>> m_aeroports;
 
-    std::atomic<bool> m_running;
-    std::thread m_thread;
-    std::mutex m_ccrMutex;
+    std::atomic<bool> m_actif;
+    std::thread m_threadCCR;
+    std::mutex m_mutexCCR;
 };
-
-#endif // ATC_H
