@@ -1,3 +1,6 @@
+#ifndef ATC_HPP
+#define ATC_HPP
+
 #include <iostream>
 #include <vector>
 #include <string>
@@ -6,133 +9,125 @@
 #include <atomic>
 #include <cmath>
 #include <memory>
+#include <fstream>
+#include <chrono>
 #include <SFML/Graphics.hpp>
 
-// États possibles d'un avion
 enum class EtatVol {
-    CROISIERE,      // Géré par le CCR
-    APPROCHE,       // Géré par l'Approche (APP)
-    ATTERRISSAGE,   // Géré par la Tour (TWR)
-    ROULAGE,        // Sur le tarmac
-    PARKING,        // Garé
-    DECOLLAGE       // Sur la piste
+    CROISIERE, APP_ENTREE, APP_FINALE, ATTERRISSAGE,
+    ROULAGE_VERS_PARKING, PARKING, ROULAGE_VERS_PISTE, DECOLLAGE
 };
 
-// Petite classe utilitaire pour écrire dans la console sans bug d'affichage
 struct Journal {
     static std::mutex mutexEcriture;
-    static void ecrire(const std::string& acteur, const std::string& message);
+    static std::ofstream fichierLog;
+    static void initialiser();
+    static void ecrire(const std::string& acteur, const std::string& action);
 };
 
-// --- Classe Avion ---
 class Avion {
 public:
-    Avion(std::string id, sf::Vector2f posDepart, sf::Vector2f posCible, float vitesse);
+    Avion(std::string id, sf::Vector2f posDepart, float vitesse);
     ~Avion();
 
-    // Gestion du moteur (Thread)
     void demarrer();
     void arreter();
 
-    // Interaction
     void definirCible(sf::Vector2f nouvelleCible);
     void changerEtat(EtatVol nouvelEtat);
+    void definirVitesse(float v);
+    void setCompteurParking(int ticks); // <--- NOUVEAU
+
     EtatVol getEtat() const;
     std::string getId() const;
-
-    // Pour l'affichage SFML
     sf::Vector2f getPosition();
+    sf::Vector2f getCible();
     float getRotation();
 
+    float getCarburant() const;
+    float getCarburantMax() const;
+    int getCompteurParking() const;     // <--- NOUVEAU
+
 private:
-    void boucleVol(); // La fonction qui tourne dans le thread
+    void boucleVol();
 
     std::string m_id;
     sf::Vector2f m_position;
     sf::Vector2f m_cible;
     float m_vitesse;
-    EtatVol m_etat;
+    float m_vitesseStandard; // Pour re-accélérer après freinage
 
-    // Gestion technique (Thread et protection des données)
+    float m_carburant;
+    float m_carburantMax;
+    float m_consommation;
+
+    int m_compteurParking; // Temps d'attente au sol
+
+    EtatVol m_etat;
     std::atomic<bool> m_enVol;
     std::thread m_threadVol;
     mutable std::mutex m_mutexDonnees;
 };
 
-// --- Tour de Contrôle (TWR) ---
 class Tour {
 public:
-    Tour(std::string nomAeroport);
-
-    // Retourne vrai si la demande est acceptée
-    bool demanderAtterrissage(std::shared_ptr<Avion> avion);
-    bool demanderDecollage(std::shared_ptr<Avion> avion);
-
-    void actualiser();
-
+    Tour(std::string nom);
+    bool demanderAccesPiste(std::shared_ptr<Avion> avion);
+    void libererPiste();
+    bool estOccupee();
 private:
     std::string m_nom;
-    bool m_pisteOccupee; // Une seule piste pour faire simple
+    std::atomic<bool> m_pisteOccupee;
     std::mutex m_mutexTour;
 };
 
-// --- Contrôle d'Approche (APP) ---
 class Approche {
 public:
-    Approche(std::string nomAeroport, sf::Vector2f position, Tour* tourAssociee);
-
+    Approche(std::string nom, sf::Vector2f pos, Tour* tour);
     void ajouterAvion(std::shared_ptr<Avion> avion);
-    void actualiser(); // Gère les avions proches
+    void actualiser();
     sf::Vector2f getPosition() const { return m_position; }
-
+    Tour* getTour() { return m_tourAssociee; }
 private:
     std::string m_nom;
     sf::Vector2f m_position;
     Tour* m_tourAssociee;
-    std::vector<std::shared_ptr<Avion>> m_avionsSousControle;
+    std::vector<std::shared_ptr<Avion>> m_avions;
     std::mutex m_mutexApp;
 };
 
-// --- Aéroport (Contient Tour + Approche) ---
 class Aeroport {
 public:
-    Aeroport(std::string nom, sf::Vector2f position);
-
+    Aeroport(std::string nom, sf::Vector2f posPiste, sf::Vector2f posParking);
     Approche& getApproche() { return *m_approche; }
     Tour& getTour() { return *m_tour; }
-
     sf::Vector2f getPosition() const { return m_position; }
+    sf::Vector2f getParking() const { return m_posParking; }
     std::string getNom() const { return m_nom; }
-
 private:
     std::string m_nom;
     sf::Vector2f m_position;
+    sf::Vector2f m_posParking;
     std::unique_ptr<Tour> m_tour;
     std::unique_ptr<Approche> m_approche;
 };
 
-// --- Centre de Contrôle Régional (CCR) ---
 class CCR {
 public:
     CCR();
     ~CCR();
-
     void ajouterVol(std::shared_ptr<Avion> avion);
     void ajouterAeroport(std::shared_ptr<Aeroport> aeroport);
-
     void lancerSimulation();
     void arreterSimulation();
-
-    // Pour dessiner dans le main
     std::vector<std::shared_ptr<Avion>> recupererVols();
-
 private:
-    void boucleControle(); // Thread principal du CCR
-
+    void boucleControle();
     std::vector<std::shared_ptr<Avion>> m_vols;
     std::vector<std::shared_ptr<Aeroport>> m_aeroports;
-
     std::atomic<bool> m_actif;
     std::thread m_threadCCR;
     std::mutex m_mutexCCR;
 };
+
+#endif

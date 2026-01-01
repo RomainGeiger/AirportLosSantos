@@ -1,120 +1,156 @@
 #include "ATC.hpp"
 #include <iostream>
 
-const int LARGEUR_FENETRE = 1200;
-const int HAUTEUR_FENETRE = 800;
+const int LARGEUR = 1024;
+const int HAUTEUR = 1024;
 
 int main() {
-    // Création de la fenêtre SFML
-    sf::RenderWindow fenetre(sf::VideoMode({ LARGEUR_FENETRE, HAUTEUR_FENETRE }), "Controle Aerien - Projet C++", sf::Style::Close);
+    sf::RenderWindow fenetre(sf::VideoMode({ LARGEUR, HAUTEUR }), "Controle Aerien - Los Santos", sf::Style::Close);
     fenetre.setFramerateLimit(60);
 
-    // Chargement de la police pour le texte
     sf::Font police;
-    if (!police.openFromFile("arial.ttf")) {
-        std::cerr << "Erreur : Impossible de charger arial.ttf" << std::endl;
+    if (!police.openFromFile("lib/arial.ttf")) {
+        std::cerr << "Erreur Police (arial.ttf manquant dans lib/)" << std::endl;
     }
 
-    // 1. Initialisation du contrôleur national (CCR)
+    sf::Texture textureMap;
+    if (!textureMap.loadFromFile("lib/gta_map.jpg")) {
+        std::cerr << "Erreur Texture (gta_map.jpg manquant dans lib/)" << std::endl;
+        return -1;
+    }
+
+    sf::Sprite spriteMap(textureMap);
+    sf::Vector2u tailleImg = textureMap.getSize();
+    spriteMap.setScale({ (float)LARGEUR / tailleImg.x, (float)HAUTEUR / tailleImg.y });
+
     CCR ccr;
 
-    // 2. Création des aéroports
-    auto cdg = std::make_shared<Aeroport>("CDG", sf::Vector2f(200, 200));
-    auto ory = std::make_shared<Aeroport>("ORY", sf::Vector2f(1000, 200));
-    auto lys = std::make_shared<Aeroport>("LYS", sf::Vector2f(600, 700));
+    // --- COORDONNEES GTA V (TES VALEURS) ---
+    // LSIA
+    sf::Vector2f posLSIA_Piste(350.0f, 950.0f);
+    sf::Vector2f posLSIA_Park(400.0f, 950.0f);
+    auto lsia = std::make_shared<Aeroport>("LSIA", posLSIA_Piste, posLSIA_Park);
 
-    ccr.ajouterAeroport(cdg);
-    ccr.ajouterAeroport(ory);
-    ccr.ajouterAeroport(lys);
+    // Sandy Shore
+    sf::Vector2f posSandy_Piste(570.0f, 425.0f);
+    sf::Vector2f posSandy_Park(620.0f, 425.0f);
+    auto sandy = std::make_shared<Aeroport>("Sandy Shores", posSandy_Piste, posSandy_Park);
 
-    // 3. Création des vols
-    // Vol vers LYS
-    auto vol1 = std::make_shared<Avion>("AFR001", sf::Vector2f(100, 100), lys->getPosition(), 1.5f);
-    // Vol vers ORY
-    auto vol2 = std::make_shared<Avion>("EZY456", sf::Vector2f(600, 650), ory->getPosition(), 2.0f);
-    // Vol vers CDG
-    auto vol3 = std::make_shared<Avion>("DLH999", sf::Vector2f(950, 250), cdg->getPosition(), 1.2f);
+    // Lago
+    sf::Vector2f posGrapeseed_Piste(260.0f, 425.0f);
+    sf::Vector2f posGrapeseed_Park(310.0f, 425.0f);
+    auto grapeseed = std::make_shared<Aeroport>("Lago", posGrapeseed_Piste, posGrapeseed_Park);
 
-    ccr.ajouterVol(vol1);
-    ccr.ajouterVol(vol2);
-    ccr.ajouterVol(vol3);
+    ccr.ajouterAeroport(lsia);
+    ccr.ajouterAeroport(sandy);
+    ccr.ajouterAeroport(grapeseed);
 
-    // Lancement de la logique (threads)
+    // --- GENERATION DE FLOTTE ---
+
+    // On crée un petit générateur de nombres aléatoires
+    srand((unsigned int)time(0));
+
+    for (int i = 0; i < 5; ++i) {
+        // Position aléatoire sur la carte (entre 50 et 900)
+        float randX = (float)(rand() % 900 + 50);
+        float randY = (float)(rand() % 900 + 50);
+
+        // Vitesse aléatoire entre 1.2 et 2.2
+        float randSpeed = 1.2f + static_cast <float>(rand()) / (static_cast <float>(RAND_MAX / 1.0f));
+
+        // Nom unique : VOL + numero
+        std::string id = "VOL" + std::to_string(100 + i);
+
+        auto avion = std::make_shared<Avion>(id, sf::Vector2f(randX, randY), randSpeed);
+
+        // On leur donne une première cible au hasard parmi les 3 aéroports
+        int r = rand() % 3;
+        if (r == 0) avion->definirCible(lsia->getPosition());
+        else if (r == 1) avion->definirCible(sandy->getPosition());
+        else avion->definirCible(grapeseed->getPosition());
+
+        ccr.ajouterVol(avion);
+    }
+
     ccr.lancerSimulation();
 
-    // 4. Boucle d'affichage
     while (fenetre.isOpen()) {
-
-        // Gestion des événements (Fermeture fenêtre)
-        while (const auto evenement = fenetre.pollEvent()) {
-            if (evenement->is<sf::Event::Closed>()) {
-                fenetre.close();
-            }
+        while (const auto ev = fenetre.pollEvent()) {
+            if (ev->is<sf::Event::Closed>()) fenetre.close();
         }
 
-        fenetre.clear(sf::Color(30, 30, 30)); // Fond gris foncé
+        fenetre.clear();
+        fenetre.draw(spriteMap);
 
-        // A. Affichage des Aéroports
-        std::vector<std::shared_ptr<Aeroport>> listeAeroports = { cdg, ory, lys };
+        std::vector<std::shared_ptr<Aeroport>> aeroports = { lsia, sandy, grapeseed };
+        for (auto& a : aeroports) {
+            // Zone APP
+            sf::CircleShape c(80);
+            c.setOrigin({ 80, 80 });
+            c.setPosition(a->getPosition());
+            c.setFillColor(sf::Color(0, 0, 255, 30));
+            c.setOutlineColor(sf::Color::Blue);
+            c.setOutlineThickness(1);
+            fenetre.draw(c);
 
-        for (auto& aero : listeAeroports) {
-            // Cercle pour la zone d'approche
-            sf::CircleShape zoneApproche(200);
-            zoneApproche.setOrigin({ 200, 200 });
-            zoneApproche.setPosition(aero->getPosition());
-            zoneApproche.setFillColor(sf::Color::Transparent);
-            zoneApproche.setOutlineColor(sf::Color(100, 100, 100));
-            zoneApproche.setOutlineThickness(1);
-            fenetre.draw(zoneApproche);
+            // Piste (Rouge)
+            sf::RectangleShape r({ 30, 10 });
+            r.setOrigin({ 15, 5 });
+            r.setPosition(a->getPosition());
+            r.setFillColor(sf::Color::Red);
+            fenetre.draw(r);
 
-            // Carré bleu pour la piste
-            sf::RectangleShape piste(sf::Vector2f(20, 20));
-            piste.setOrigin({ 10, 10 });
-            piste.setPosition(aero->getPosition());
-            piste.setFillColor(sf::Color::Blue);
-            fenetre.draw(piste);
+            // Parking (Vert)
+            sf::RectangleShape p({ 10, 10 });
+            p.setOrigin({ 5, 5 });
+            p.setPosition(a->getParking());
+            p.setFillColor(sf::Color::Green);
+            fenetre.draw(p);
 
-            // Nom de l'aéroport
-            sf::Text texteNom(police, aero->getNom(), 15);
-            texteNom.setPosition({ aero->getPosition().x + 15, aero->getPosition().y - 10 });
-            fenetre.draw(texteNom);
+            sf::Text t(police, a->getNom(), 14);
+            t.setPosition(a->getPosition() + sf::Vector2f(0, -30));
+            t.setOutlineColor(sf::Color::Black);
+            t.setOutlineThickness(1);
+            fenetre.draw(t);
         }
 
-        // B. Affichage des Avions
         auto vols = ccr.recupererVols();
+        for (auto& av : vols) {
+            sf::Vector2f pos = av->getPosition();
 
-        for (auto& avion : vols) {
-            sf::Vector2f pos = avion->getPosition();
+            sf::ConvexShape s;
+            s.setPointCount(3);
+            s.setPoint(0, { 10, 0 });
+            s.setPoint(1, { -10, -7 });
+            s.setPoint(2, { -10, 7 });
+            s.setPosition(pos);
+            s.setRotation(sf::degrees(av->getRotation()));
 
-            // Triangle pour représenter l'avion
-            sf::ConvexShape formeAvion;
-            formeAvion.setPointCount(3);
-            formeAvion.setPoint(0, sf::Vector2f(10, 0));   // Nez
-            formeAvion.setPoint(1, sf::Vector2f(-10, -7)); // Aile gauche
-            formeAvion.setPoint(2, sf::Vector2f(-10, 7));  // Aile droite
+            // Couleur Fuel
+            float fuelPct = av->getCarburant() / av->getCarburantMax();
+            if (fuelPct < 0.2f) s.setFillColor(sf::Color(255, 140, 0)); // Orange
+            else {
+                switch (av->getEtat()) {
+                case EtatVol::CROISIERE: s.setFillColor(sf::Color::Cyan); break;
+                case EtatVol::ATTERRISSAGE: s.setFillColor(sf::Color::Magenta); break;
+                case EtatVol::PARKING: s.setFillColor(sf::Color::Black); break;
+                case EtatVol::DECOLLAGE: s.setFillColor(sf::Color::White); break;
+                default: s.setFillColor(sf::Color::Yellow); break;
+                }
+            }
+            fenetre.draw(s);
 
-            formeAvion.setPosition(pos);
-            formeAvion.setRotation(sf::degrees(avion->getRotation()));
-
-            // Couleur selon l'état du vol
-            EtatVol etat = avion->getEtat();
-            if (etat == EtatVol::CROISIERE) formeAvion.setFillColor(sf::Color::Green);
-            else if (etat == EtatVol::APPROCHE) formeAvion.setFillColor(sf::Color::Yellow);
-            else if (etat == EtatVol::ATTERRISSAGE) formeAvion.setFillColor(sf::Color::Red);
-            else formeAvion.setFillColor(sf::Color::White); // Au sol
-
-            fenetre.draw(formeAvion);
-
-            // Identifiant de l'avion
-            sf::Text texteId(police, avion->getId(), 12);
-            texteId.setPosition({ pos.x + 15, pos.y });
-            fenetre.draw(texteId);
+            std::string label = av->getId() + "\n" + std::to_string((int)(fuelPct * 100)) + "%";
+            sf::Text lbl(police, label, 10);
+            lbl.setPosition(pos + sf::Vector2f(12, -10));
+            lbl.setOutlineColor(sf::Color::Black);
+            lbl.setOutlineThickness(1);
+            fenetre.draw(lbl);
         }
 
         fenetre.display();
     }
 
-    // Nettoyage avant de quitter
     ccr.arreterSimulation();
     return 0;
 }

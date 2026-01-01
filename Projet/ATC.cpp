@@ -1,84 +1,62 @@
 #include "ATC.hpp"
+#include <iomanip>
 
-#include <fstream>  // Pour écrire dans les fichiers
-#include <chrono>   // Pour l'heure
-#include <iomanip>  // Pour le formatage de l'heure
-
-// --- Gestion du Journal (Log JSON) ---
 std::mutex Journal::mutexEcriture;
-// On ouvre le fichier en mode "Append" (ajout) pour ne pas l'écraser à chaque ligne
-std::ofstream fichierLog("logs.json", std::ios::app);
+std::ofstream Journal::fichierLog;
 
-void Journal::ecrire(const std::string& acteur, const std::string& message) {
-    std::lock_guard<std::mutex> verrou(mutexEcriture);
-
-    // Récupération de l'heure actuelle
-    auto now = std::chrono::system_clock::now();
-    auto temps = std::chrono::system_clock::to_time_t(now);
-
-    // Formatage manuel en JSON
-    // Exemple : {"heure": "14:05:01", "acteur": "CCR", "action": "Transfert vol"}
-    if (fichierLog.is_open()) {
-        fichierLog << "{";
-        fichierLog << "\"heure\": \"" << std::put_time(std::localtime(&temps), "%H:%M:%S") << "\", ";
-        fichierLog << "\"acteur\": \"" << acteur << "\", ";
-        fichierLog << "\"action\": \"" << message << "\"";
-        fichierLog << "}," << std::endl; // La virgule pour séparer les objets JSON
-    }
-
-    // On garde l'affichage console pour le débuggage visuel
-    std::cout << "[" << acteur << "] " << message << std::endl;
+void Journal::initialiser() {
+    fichierLog.open("logs.json", std::ios::out | std::ios::trunc);
 }
 
-// --- Classe Avion ---
-Avion::Avion(std::string id, sf::Vector2f posDepart, sf::Vector2f posCible, float vitesse)
-    : m_id(id), m_position(posDepart), m_cible(posCible), m_vitesse(vitesse),
+void Journal::ecrire(const std::string& acteur, const std::string& action) {
+    std::lock_guard<std::mutex> verrou(mutexEcriture);
+
+    // Ecriture fichier
+    if (fichierLog.is_open()) {
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+        fichierLog << "{\"t\": " << t << ", \"qui\": \"" << acteur << "\", \"quoi\": \"" << action << "\"}" << std::endl;
+    }
+
+    // Ecriture Console (Rétablie)
+    std::cout << "[" << std::setw(10) << acteur << "] " << action << std::endl;
+}
+
+// --- Avion ---
+Avion::Avion(std::string id, sf::Vector2f posDepart, float vitesse)
+    : m_id(id), m_position(posDepart), m_cible(posDepart), m_vitesse(vitesse), m_vitesseStandard(vitesse),
+    m_carburant(1000.0f), m_carburantMax(1000.0f), m_consommation(0.5f), m_compteurParking(0),
     m_etat(EtatVol::CROISIERE), m_enVol(false) {
 }
 
-Avion::~Avion() {
-    arreter();
-}
+Avion::~Avion() { arreter(); }
 
 void Avion::demarrer() {
     m_enVol = true;
     m_threadVol = std::thread(&Avion::boucleVol, this);
-    Journal::ecrire("Avion " + m_id, "Moteur demarre");
 }
-
 void Avion::arreter() {
     m_enVol = false;
     if (m_threadVol.joinable()) m_threadVol.join();
 }
 
-void Avion::definirCible(sf::Vector2f nouvelleCible) {
-    std::lock_guard<std::mutex> verrou(m_mutexDonnees);
-    m_cible = nouvelleCible;
-}
+void Avion::definirCible(sf::Vector2f c) { std::lock_guard<std::mutex> l(m_mutexDonnees); m_cible = c; }
+void Avion::changerEtat(EtatVol e) { std::lock_guard<std::mutex> l(m_mutexDonnees); m_etat = e; }
+void Avion::definirVitesse(float v) { std::lock_guard<std::mutex> l(m_mutexDonnees); m_vitesse = v; }
+void Avion::setCompteurParking(int ticks) { std::lock_guard<std::mutex> l(m_mutexDonnees); m_compteurParking = ticks; }
 
-void Avion::changerEtat(EtatVol nouvelEtat) {
-    std::lock_guard<std::mutex> verrou(m_mutexDonnees);
-    m_etat = nouvelEtat;
-}
-
-EtatVol Avion::getEtat() const {
-    return m_etat;
-}
-
-std::string Avion::getId() const {
-    return m_id;
-}
-
-sf::Vector2f Avion::getPosition() {
-    std::lock_guard<std::mutex> verrou(m_mutexDonnees);
-    return m_position;
-}
+EtatVol Avion::getEtat() const { return m_etat; }
+std::string Avion::getId() const { return m_id; }
+sf::Vector2f Avion::getPosition() { std::lock_guard<std::mutex> l(m_mutexDonnees); return m_position; }
+sf::Vector2f Avion::getCible() { std::lock_guard<std::mutex> l(m_mutexDonnees); return m_cible; }
+float Avion::getCarburant() const { return m_carburant; }
+float Avion::getCarburantMax() const { return m_carburantMax; }
+int Avion::getCompteurParking() const { return m_compteurParking; }
 
 float Avion::getRotation() {
-    std::lock_guard<std::mutex> verrou(m_mutexDonnees);
-    // Calcul de l'angle pour orienter le triangle (maths de base)
-    sf::Vector2f direction = m_cible - m_position;
-    return std::atan2(direction.y, direction.x) * 180.0f / 3.14159f;
+    std::lock_guard<std::mutex> l(m_mutexDonnees);
+    sf::Vector2f d = m_cible - m_position;
+    return std::atan2(d.y, d.x) * 180.0f / 3.14159f;
 }
 
 void Avion::boucleVol() {
@@ -86,198 +64,228 @@ void Avion::boucleVol() {
         {
             std::lock_guard<std::mutex> verrou(m_mutexDonnees);
 
-            // Calcul du déplacement
-            sf::Vector2f direction = m_cible - m_position;
-            float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-
-            if (distance > 2.0f) {
-                // On avance vers la cible
-                sf::Vector2f normalise = direction / distance;
-                m_position += normalise * m_vitesse;
+            // 1. Gestion Carburant & Timer
+            if (m_etat == EtatVol::PARKING) {
+                // Remplissage lent
+                if (m_carburant < m_carburantMax) m_carburant += 3.0f;
+                // Décompte du temps d'attente
+                if (m_compteurParking > 0) m_compteurParking--;
             }
             else {
-                // Arrivé à destination
-                if (m_etat == EtatVol::ATTERRISSAGE) {
-                    m_etat = EtatVol::ROULAGE;
-                }
+                // Consommation en vol/roulage
+                m_carburant -= m_consommation;
+                if (m_carburant < 0) m_carburant = 0;
+            }
+
+            // 2. Physique
+            sf::Vector2f dir = m_cible - m_position;
+            float dist = std::hypot(dir.x, dir.y);
+            if (dist > 2.0f) {
+                sf::Vector2f norm = dir / dist;
+                m_position += norm * m_vitesse;
             }
         }
-        // Petite pause pour simuler le temps (environ 60 images/seconde)
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 }
 
-// --- Classe Tour (TWR) ---
-Tour::Tour(std::string nomAeroport) : m_nom(nomAeroport), m_pisteOccupee(false) {}
+// --- Tour ---
+Tour::Tour(std::string nom) : m_nom(nom), m_pisteOccupee(false) {}
 
-bool Tour::demanderDecollage(std::shared_ptr<Avion> avion) {
-    std::lock_guard<std::mutex> verrou(m_mutexTour);
-
+bool Tour::demanderAccesPiste(std::shared_ptr<Avion> avion) {
+    std::lock_guard<std::mutex> l(m_mutexTour);
     if (!m_pisteOccupee) {
         m_pisteOccupee = true;
-        Journal::ecrire("Tour " + m_nom, "Decollage autorise pour " + avion->getId());
-
-        // On libère la piste après 5 secondes (simulation)
-        std::thread([this]() {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            this->m_pisteOccupee = false;
-            }).detach();
+        Journal::ecrire("TWR " + m_nom, "Piste accordee a " + avion->getId());
         return true;
     }
     return false;
 }
+void Tour::libererPiste() { m_pisteOccupee = false; }
+bool Tour::estOccupee() { return m_pisteOccupee; }
 
-bool Tour::demanderAtterrissage(std::shared_ptr<Avion> avion) {
-    std::lock_guard<std::mutex> verrou(m_mutexTour);
-
-    if (!m_pisteOccupee) {
-        m_pisteOccupee = true;
-        Journal::ecrire("Tour " + m_nom, "Atterrissage autorise pour " + avion->getId());
-
-        // On libère la piste après 5 secondes
-        std::thread([this]() {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            this->m_pisteOccupee = false;
-            Journal::ecrire("Tour " + m_nom, "Piste liberee");
-            }).detach();
-
-        return true;
-    }
-    return false;
+// --- Approche ---
+Approche::Approche(std::string nom, sf::Vector2f pos, Tour* t)
+    : m_nom(nom), m_position(pos), m_tourAssociee(t) {
 }
 
-void Tour::actualiser() {
-    // Vide pour l'instant (gestion parking plus tard)
-}
-
-// --- Classe Approche (APP) ---
-Approche::Approche(std::string nomAeroport, sf::Vector2f position, Tour* tourAssociee)
-    : m_nom(nomAeroport), m_position(position), m_tourAssociee(tourAssociee) {
-}
-
-void Approche::ajouterAvion(std::shared_ptr<Avion> avion) {
-    std::lock_guard<std::mutex> verrou(m_mutexApp);
-    m_avionsSousControle.push_back(avion);
-
-    avion->changerEtat(EtatVol::APPROCHE);
-    avion->definirCible(m_position); // L'avion se dirige vers l'aéroport
-
-    Journal::ecrire("APP " + m_nom, "Prise en charge de " + avion->getId());
+void Approche::ajouterAvion(std::shared_ptr<Avion> av) {
+    std::lock_guard<std::mutex> l(m_mutexApp);
+    m_avions.push_back(av);
+    av->changerEtat(EtatVol::APP_ENTREE);
+    av->definirCible(m_position);
+    Journal::ecrire("APP " + m_nom, "Radar contact " + av->getId());
 }
 
 void Approche::actualiser() {
-    std::lock_guard<std::mutex> verrou(m_mutexApp);
+    std::lock_guard<std::mutex> l(m_mutexApp);
+    m_avions.erase(std::remove_if(m_avions.begin(), m_avions.end(),
+        [](std::shared_ptr<Avion> a) { return a->getEtat() == EtatVol::CROISIERE; }), m_avions.end());
 
-    for (auto& avion : m_avionsSousControle) {
-        // Calcul distance entre avion et aéroport
-        sf::Vector2f dist = avion->getPosition() - m_position;
-        float d = std::sqrt(dist.x * dist.x + dist.y * dist.y);
+    for (auto& av : m_avions) {
+        sf::Vector2f pos = av->getPosition();
+        float d = std::hypot(pos.x - m_position.x, pos.y - m_position.y);
 
-        // Si l'avion est proche (< 50 pixels) et en approche, on demande la tour
-        if (d < 50.0f && avion->getEtat() == EtatVol::APPROCHE) {
-            if (m_tourAssociee->demanderAtterrissage(avion)) {
-                avion->changerEtat(EtatVol::ATTERRISSAGE);
-                Journal::ecrire("APP " + m_nom, "Transfert vers Tour pour " + avion->getId());
+        if (av->getEtat() == EtatVol::APP_ENTREE && d < 100.0f) {
+            if (m_tourAssociee->demanderAccesPiste(av)) {
+                av->changerEtat(EtatVol::ATTERRISSAGE);
+                Journal::ecrire("APP " + m_nom, "Autorise atterrissage " + av->getId());
+            }
+            else {
+                av->definirVitesse(0.5f);
             }
         }
     }
 }
 
-// --- Classe Aeroport ---
-Aeroport::Aeroport(std::string nom, sf::Vector2f position)
-    : m_nom(nom), m_position(position) {
+// --- Aeroport ---
+Aeroport::Aeroport(std::string nom, sf::Vector2f p, sf::Vector2f pk)
+    : m_nom(nom), m_position(p), m_posParking(pk) {
     m_tour = std::make_unique<Tour>(nom);
-    m_approche = std::make_unique<Approche>(nom, position, m_tour.get());
+    m_approche = std::make_unique<Approche>(nom, p, m_tour.get());
 }
 
-// --- Classe CCR ---
-CCR::CCR() : m_actif(false) {}
+// --- CCR ---
+CCR::CCR() : m_actif(false) { Journal::initialiser(); }
 CCR::~CCR() { arreterSimulation(); }
 
-void CCR::ajouterVol(std::shared_ptr<Avion> avion) {
-    std::lock_guard<std::mutex> verrou(m_mutexCCR);
-    m_vols.push_back(avion);
-    avion->demarrer();
-}
-
-void CCR::ajouterAeroport(std::shared_ptr<Aeroport> aeroport) {
-    m_aeroports.push_back(aeroport);
-}
-
-void CCR::lancerSimulation() {
-    m_actif = true;
-    m_threadCCR = std::thread(&CCR::boucleControle, this);
-}
-
-void CCR::arreterSimulation() {
-    m_actif = false;
-    if (m_threadCCR.joinable()) m_threadCCR.join();
-}
-
-std::vector<std::shared_ptr<Avion>> CCR::recupererVols() {
-    std::lock_guard<std::mutex> verrou(m_mutexCCR);
-    return m_vols;
-}
+void CCR::ajouterVol(std::shared_ptr<Avion> a) { std::lock_guard<std::mutex> l(m_mutexCCR); m_vols.push_back(a); a->demarrer(); }
+void CCR::ajouterAeroport(std::shared_ptr<Aeroport> a) { m_aeroports.push_back(a); }
+std::vector<std::shared_ptr<Avion>> CCR::recupererVols() { std::lock_guard<std::mutex> l(m_mutexCCR); return m_vols; }
+void CCR::lancerSimulation() { m_actif = true; m_threadCCR = std::thread(&CCR::boucleControle, this); }
+void CCR::arreterSimulation() { m_actif = false; if (m_threadCCR.joinable()) m_threadCCR.join(); }
 
 void CCR::boucleControle() {
     while (m_actif) {
         {
             std::lock_guard<std::mutex> verrou(m_mutexCCR);
 
-            // 1. Gestion des Transferts (Logique existante)
-            for (auto& avion : m_vols) {
-                if (avion->getEtat() == EtatVol::CROISIERE) {
-                    sf::Vector2f posAvion = avion->getPosition();
-                    for (auto& aeroport : m_aeroports) {
-                        sf::Vector2f posAero = aeroport->getPosition();
-                        float distance = std::hypot(posAvion.x - posAero.x, posAvion.y - posAero.y);
-
-                        if (distance < 200.0f) {
-                            Journal::ecrire("CCR", "Transfert " + avion->getId() + " vers " + aeroport->getNom());
-                            aeroport->getApproche().ajouterAvion(avion);
-                        }
-                    }
-                }
-            }
-
-            // 2. --- NOUVEAU : GESTION ANTI-COLLISION (Mission de Rex) ---
-            // On compare chaque avion avec tous les autres
+            // 1. ANTI-COLLISION
             for (size_t i = 0; i < m_vols.size(); ++i) {
-                for (size_t j = i + 1; j < m_vols.size(); ++j) {
 
-                    auto avionA = m_vols[i];
-                    auto avionB = m_vols[j];
+                // On ne gère les collisions que si l'avion est EN L'AIR (Croisière)
+                // Si on est au sol ou en approche finale, on fait confiance à la Tour (TWR)
+                if (m_vols[i]->getEtat() != EtatVol::CROISIERE) continue;
 
-                    // On ne gère que les avions en croisière pour l'instant
-                    if (avionA->getEtat() == EtatVol::CROISIERE &&
-                        avionB->getEtat() == EtatVol::CROISIERE) {
+                bool risqueCollision = false;
 
-                        sf::Vector2f posA = avionA->getPosition();
-                        sf::Vector2f posB = avionB->getPosition();
+                for (size_t j = 0; j < m_vols.size(); ++j) {
+                    if (i == j) continue; // Pas de collision avec soi-même
 
-                        // Calcul distance
-                        float dist = std::hypot(posA.x - posB.x, posA.y - posB.y);
+                    // On ne teste la collision qu'avec d'autres avions en CROISIERE
+                    if (m_vols[j]->getEtat() != EtatVol::CROISIERE) continue;
 
-                        // Si trop proches (< 50 pixels)
-                        if (dist < 50.0f) {
-                            // ACTION D'URGENCE : On arrête temporairement l'avion B
-                            // Dans un vrai projet, on changerait son cap, mais ici on simule un ralentissement
-                            // Note : Il faudrait ajouter une méthode setVitesse() dans Avion pour faire mieux
-                            Journal::ecrire("ALERTE CCR", "Conflit detecte entre " + avionA->getId() + " et " + avionB->getId());
+                    sf::Vector2f d = m_vols[i]->getPosition() - m_vols[j]->getPosition();
+                    float dist = std::hypot(d.x, d.y);
 
-                            // Solution temporaire simple : décaler légèrement l'avion B pour éviter la superposition
-                            // (C'est de la triche visuelle, mais ça évite le crash graphique)
-                            // L'idéal serait de changer la vitesse via une méthode setVitesse()
+                    // Zone de danger (60 pixels)
+                    if (dist < 60.0f) {
+                        m_vols[i]->definirVitesse(0.0f); // Freinage d'urgence
+                        risqueCollision = true;
+                    }
+                }
+
+                // Si le danger est écarté, on relance la machine
+                if (!risqueCollision && m_vols[i]->getEtat() == EtatVol::CROISIERE) {
+                    // On remet une vitesse normale (simplifié)
+                    // Idéalement on stockerait la vitesse max dans une variable m_vitesseMax
+                    m_vols[i]->definirVitesse(1.5f);
+                }
+            }
+            }
+
+
+            // 2. GESTION DES FLUX
+            for (auto& av : m_vols) {
+                EtatVol etat = av->getEtat();
+                sf::Vector2f pos = av->getPosition();
+                sf::Vector2f target = av->getCible();
+
+                // 1. CROISIERE -> APPROCHE
+                if (etat == EtatVol::CROISIERE) {
+                    for (auto& aero : m_aeroports) {
+                        float dist = std::hypot(pos.x - aero->getPosition().x, pos.y - aero->getPosition().y);
+                        float distCible = std::hypot(target.x - aero->getPosition().x, target.y - aero->getPosition().y);
+
+                        if (dist < 300.0f && distCible < 10.0f) {
+                            aero->getApproche().ajouterAvion(av);
+                            break;
+                        }
+                    }
+                }
+
+                // 2. ATTERRISSAGE -> PARKING
+                if (etat == EtatVol::ATTERRISSAGE) {
+                    for (auto& aero : m_aeroports) {
+                        if (std::hypot(pos.x - aero->getPosition().x, pos.y - aero->getPosition().y) < 10.0f) {
+                            av->changerEtat(EtatVol::ROULAGE_VERS_PARKING);
+                            av->definirCible(aero->getParking());
+                        }
+                    }
+                }
+
+                // 3. ARRIVÉE PARKING (Lancement Timer)
+                if (etat == EtatVol::ROULAGE_VERS_PARKING) {
+                    for (auto& aero : m_aeroports) {
+                        if (std::hypot(pos.x - aero->getParking().x, pos.y - aero->getParking().y) < 5.0f) {
+                            av->changerEtat(EtatVol::PARKING);
+                            // On définit un temps d'attente (ex: 500 ticks ~ 8-10 secondes)
+                            av->setCompteurParking(500);
+                            aero->getTour().libererPiste();
+                            Journal::ecrire("SOL", av->getId() + " au parking. Arret moteurs.");
+                        }
+                    }
+                }
+
+                // 4. DÉPART PARKING (Condition : Plein ET Timer fini)
+                if (etat == EtatVol::PARKING) {
+                    if (av->getCarburant() >= 990.0f && av->getCompteurParking() <= 0) {
+                        for (auto& aero : m_aeroports) {
+                            if (std::hypot(pos.x - aero->getParking().x, pos.y - aero->getParking().y) < 10.0f) {
+                                av->changerEtat(EtatVol::ROULAGE_VERS_PISTE);
+                                av->definirCible(aero->getPosition());
+                                Journal::ecrire("SOL", av->getId() + " demarrage et roulage piste.");
+                            }
+                        }
+                    }
+                }
+
+                // 5. DEMANDE DÉCOLLAGE
+                if (etat == EtatVol::ROULAGE_VERS_PISTE) {
+                    for (auto& aero : m_aeroports) {
+                        if (std::hypot(pos.x - aero->getPosition().x, pos.y - aero->getPosition().y) < 10.0f) {
+                            if (aero->getTour().demanderAccesPiste(av)) {
+                                av->changerEtat(EtatVol::DECOLLAGE);
+                                av->definirCible(aero->getPosition() + sf::Vector2f(0, -200));
+                            }
+                        }
+                    }
+                }
+
+                // 6. FIN DÉCOLLAGE -> NOUVELLE DESTINATION
+                if (etat == EtatVol::DECOLLAGE) {
+                    for (auto& aero : m_aeroports) {
+                        float dist = std::hypot(pos.x - aero->getPosition().x, pos.y - aero->getPosition().y);
+
+                        if (dist > 100.0f && dist < 150.0f) {
+                            std::shared_ptr<Aeroport> dest = nullptr;
+                            int attempts = 0;
+                            do {
+                                int r = rand() % m_aeroports.size();
+                                dest = m_aeroports[r];
+                                attempts++;
+                            } while (dest->getNom() == aero->getNom() && attempts < 10);
+
+                            av->changerEtat(EtatVol::CROISIERE);
+                            av->definirCible(dest->getPosition());
+                            aero->getTour().libererPiste();
+
+                            Journal::ecrire("CCR", av->getId() + " cap sur " + dest->getNom());
                         }
                     }
                 }
             }
-
-            // 3. Mise à jour des Approches
-            for (auto& aeroport : m_aeroports) {
-                aeroport->getApproche().actualiser();
-            }
+            for (auto& a : m_aeroports) a->getApproche().actualiser();
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-}
