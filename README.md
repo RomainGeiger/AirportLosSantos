@@ -38,3 +38,6 @@ L'état des avions est visible directement via leur couleur sur la map :
 * **LSIA** (Los Santos International)
 * **Sandy Shores**
 * **Lago Zancudo** (Grapeseed)
+
+## Crédits
+Réalisé par Romain Geiger et Félix Beuvry
