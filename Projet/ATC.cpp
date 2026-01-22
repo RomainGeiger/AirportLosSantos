@@ -18,7 +18,7 @@ void Journal::ecrire(const std::string& acteur, const std::string& action) {
         fichierLog << "{\"t\": " << t << ", \"qui\": \"" << acteur << "\", \"quoi\": \"" << action << "\"}" << std::endl;
     }
 
-    // Ecriture Console (Rétablie)
+    // Ecriture Console
     std::cout << "[" << std::setw(10) << acteur << "] " << action << std::endl;
 }
 
@@ -68,7 +68,7 @@ void Avion::boucleVol() {
             if (m_etat == EtatVol::PARKING) {
                 // Remplissage lent
                 if (m_carburant < m_carburantMax) m_carburant += 3.0f;
-                // Décompte du temps d'attente
+                // DÃ©compte du temps d'attente
                 if (m_compteurParking > 0) m_compteurParking--;
             }
             else {
@@ -163,14 +163,14 @@ void CCR::boucleControle() {
             // 1. ANTI-COLLISION
             for (size_t i = 0; i < m_vols.size(); ++i) {
 
-                // On ne gère les collisions que si l'avion est EN L'AIR (Croisière)
-                // Si on est au sol ou en approche finale, on fait confiance à la Tour (TWR)
+                // On ne gÃ¨re les collisions que si l'avion est EN L'AIR (CroisiÃ¨re)
+                // Si on est au sol ou en approche finale, on fait confiance Ã  la Tour (TWR)
                 if (m_vols[i]->getEtat() != EtatVol::CROISIERE) continue;
 
                 bool risqueCollision = false;
 
                 for (size_t j = 0; j < m_vols.size(); ++j) {
-                    if (i == j) continue; // Pas de collision avec soi-même
+                    if (i == j) continue; // Pas de collision avec soi-mÃªme
 
                     // On ne teste la collision qu'avec d'autres avions en CROISIERE
                     if (m_vols[j]->getEtat() != EtatVol::CROISIERE) continue;
@@ -185,10 +185,9 @@ void CCR::boucleControle() {
                     }
                 }
 
-                // Si le danger est écarté, on relance la machine
+                // Si le danger est Ã©cartÃ©, on relance la machine
                 if (!risqueCollision && m_vols[i]->getEtat() == EtatVol::CROISIERE) {
-                    // On remet une vitesse normale (simplifié)
-                    // Idéalement on stockerait la vitesse max dans une variable m_vitesseMax
+                    // On remet une vitesse normale
                     m_vols[i]->definirVitesse(1.5f);
                 }
             }
@@ -224,12 +223,12 @@ void CCR::boucleControle() {
                     }
                 }
 
-                // 3. ARRIVÉE PARKING (Lancement Timer)
+                // 3. ARRIVÃ‰E PARKING (Lancement Timer)
                 if (etat == EtatVol::ROULAGE_VERS_PARKING) {
                     for (auto& aero : m_aeroports) {
                         if (std::hypot(pos.x - aero->getParking().x, pos.y - aero->getParking().y) < 5.0f) {
                             av->changerEtat(EtatVol::PARKING);
-                            // On définit un temps d'attente (ex: 500 ticks ~ 8-10 secondes)
+                            // On dÃ©finit un temps d'attente (ex: 500 ticks ~ 8-10 secondes)
                             av->setCompteurParking(500);
                             aero->getTour().libererPiste();
                             Journal::ecrire("SOL", av->getId() + " au parking. Arret moteurs.");
@@ -237,7 +236,7 @@ void CCR::boucleControle() {
                     }
                 }
 
-                // 4. DÉPART PARKING (Condition : Plein ET Timer fini)
+                // 4. DÃ‰PART PARKING (Condition : Plein ET Timer fini)
                 if (etat == EtatVol::PARKING) {
                     if (av->getCarburant() >= 990.0f && av->getCompteurParking() <= 0) {
                         for (auto& aero : m_aeroports) {
@@ -250,7 +249,7 @@ void CCR::boucleControle() {
                     }
                 }
 
-                // 5. DEMANDE DÉCOLLAGE
+                // 5. DEMANDE DÃ‰COLLAGE
                 if (etat == EtatVol::ROULAGE_VERS_PISTE) {
                     for (auto& aero : m_aeroports) {
                         if (std::hypot(pos.x - aero->getPosition().x, pos.y - aero->getPosition().y) < 10.0f) {
@@ -262,7 +261,7 @@ void CCR::boucleControle() {
                     }
                 }
 
-                // 6. FIN DÉCOLLAGE -> NOUVELLE DESTINATION
+                // 6. FIN DÃ‰COLLAGE -> NOUVELLE DESTINATION
                 if (etat == EtatVol::DECOLLAGE) {
                     for (auto& aero : m_aeroports) {
                         float dist = std::hypot(pos.x - aero->getPosition().x, pos.y - aero->getPosition().y);
