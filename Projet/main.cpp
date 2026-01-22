@@ -25,7 +25,7 @@ int main() {
 
     CCR ccr;
 
-    // --- COORDONNEES GTA V (TES VALEURS) ---
+    // --- COORDONNEES GTA V  ---
     // LSIA
     sf::Vector2f posLSIA_Piste(350.0f, 950.0f);
     sf::Vector2f posLSIA_Park(400.0f, 950.0f);
@@ -47,15 +47,15 @@ int main() {
 
     // --- GENERATION DE FLOTTE ---
 
-    // On crée un petit générateur de nombres aléatoires
+    // On crÃ©e un petit gÃ©nÃ©rateur de nombres alÃ©atoires
     srand((unsigned int)time(0));
 
     for (int i = 0; i < 5; ++i) {
-        // Position aléatoire sur la carte (entre 50 et 900)
+        // Position alÃ©atoire sur la carte (entre 50 et 900)
         float randX = (float)(rand() % 900 + 50);
         float randY = (float)(rand() % 900 + 50);
 
-        // Vitesse aléatoire entre 1.2 et 2.2
+        // Vitesse alÃ©atoire entre 1.2 et 2.2
         float randSpeed = 1.2f + static_cast <float>(rand()) / (static_cast <float>(RAND_MAX / 1.0f));
 
         // Nom unique : VOL + numero
@@ -63,7 +63,7 @@ int main() {
 
         auto avion = std::make_shared<Avion>(id, sf::Vector2f(randX, randY), randSpeed);
 
-        // On leur donne une première cible au hasard parmi les 3 aéroports
+        // On choisit une cible au hasard parmi les 3 aÃ©roports
         int r = rand() % 3;
         if (r == 0) avion->definirCible(lsia->getPosition());
         else if (r == 1) avion->definirCible(sandy->getPosition());
