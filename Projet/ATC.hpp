@@ -36,7 +36,7 @@ public:
     void definirCible(sf::Vector2f nouvelleCible);
     void changerEtat(EtatVol nouvelEtat);
     void definirVitesse(float v);
-    void setCompteurParking(int ticks); // <--- NOUVEAU
+    void setCompteurParking(int ticks);
 
     EtatVol getEtat() const;
     std::string getId() const;
@@ -46,7 +46,7 @@ public:
 
     float getCarburant() const;
     float getCarburantMax() const;
-    int getCompteurParking() const;     // <--- NOUVEAU
+    int getCompteurParking() const;
 
 private:
     void boucleVol();
@@ -55,13 +55,13 @@ private:
     sf::Vector2f m_position;
     sf::Vector2f m_cible;
     float m_vitesse;
-    float m_vitesseStandard; // Pour re-accélérer après freinage
+    float m_vitesseStandard;
 
     float m_carburant;
     float m_carburantMax;
     float m_consommation;
 
-    int m_compteurParking; // Temps d'attente au sol
+    int m_compteurParking;
 
     EtatVol m_etat;
     std::atomic<bool> m_enVol;
